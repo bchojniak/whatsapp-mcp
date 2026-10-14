@@ -267,7 +267,13 @@ func (d *MediaDownloader) GetMediaType() whatsmeow.MediaType {
 	return d.MediaType
 }
 
-func downloadMedia(client *whatsmeow.Client, messageStore *MessageStore, messageID, chatJID string) (bool, string, string, string, error) {
+type mediaDownloadClient interface {
+	Download(context.Context, whatsmeow.DownloadableMessage) ([]byte, error)
+}
+
+var _ mediaDownloadClient = (*whatsmeow.Client)(nil)
+
+func downloadMedia(client mediaDownloadClient, messageStore *MessageStore, messageID, chatJID string) (bool, string, string, string, error) {
 	var mediaType, filename, url string
 	var mediaKey, fileSHA256, fileEncSHA256 []byte
 	var fileLength uint64
@@ -366,14 +372,7 @@ func downloadMedia(client *whatsmeow.Client, messageStore *MessageStore, message
 
 	mediaData, err := client.Download(context.Background(), downloader)
 	if err != nil {
-		pathOnly := strings.SplitN(directPath, "?", 2)[0]
-		if pathOnly != directPath {
-			downloader.DirectPath = pathOnly
-			mediaData, err = client.Download(context.Background(), downloader)
-		}
-		if err != nil {
-			return false, "", "", "", fmt.Errorf("failed to download media: %v", err)
-		}
+		return false, "", "", "", fmt.Errorf("failed to download media: %v", err)
 	}
 
 	if err := os.WriteFile(localPath, mediaData, 0600); err != nil {

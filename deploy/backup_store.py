@@ -297,6 +297,14 @@ def _log_manifest(status: str, manifest: dict) -> None:
     )
 
 
+def _pending_retention_migration_reserve_bytes(source: Path, details: dict) -> int:
+    if source.name != "messages.db" or details["migration_complete"]:
+        return 0
+    archive_growth_bytes = details["estimated_bytes"]
+    migration_journal_bytes = archive_growth_bytes
+    return archive_growth_bytes + migration_journal_bytes
+
+
 def prepare_backups(store: Path, *, require_existing: bool = False) -> list[dict]:
     """Caller must hold store_lock until the bridge stops, not just this function."""
     if require_existing and any(not (store / name).exists() for name in DATABASE_NAMES):
@@ -341,24 +349,26 @@ def prepare_backups(store: Path, *, require_existing: bool = False) -> list[dict
             _log_manifest("reused", manifest)
         else:
             pending.append((source, details))
-    reserve = MINIMUM_HEADROOM + 2 * sum(
-        info["estimated_bytes"]
-        for source, info in sources
-        if source.name == "messages.db" and not info["migration_complete"]
+    initial_runtime_reserve_bytes = MINIMUM_HEADROOM + sum(
+        _pending_retention_migration_reserve_bytes(source, details)
+        for source, details in sources
     )
-    pending_bytes = sum(info["estimated_bytes"] for _, info in pending)
-    _require_space(store, reserve + pending_bytes)
+    remaining_backup_bytes = sum(info["estimated_bytes"] for _, info in pending)
+    _require_space(store, initial_runtime_reserve_bytes + remaining_backup_bytes)
     for source, details in pending:
-        pending_bytes -= details["estimated_bytes"]
+        remaining_backup_bytes -= details["estimated_bytes"]
         manifest = _create_backup(
-            transition / source.name, source, details, reserve + pending_bytes
+            transition / source.name,
+            source,
+            details,
+            initial_runtime_reserve_bytes + remaining_backup_bytes,
         )
         completed.append(manifest)
         _log_manifest("created", manifest)
     present = {name for name in DATABASE_NAMES if (store / name).exists()}
     if present != {source.name for source, _ in sources}:
         _fail("source_set_changed_during_backup")
-    remaining_migration_bytes = 0
+    current_migration_reserve_bytes = 0
     for source, original in sources:
         current = _source_details(source)
         if require_existing and (
@@ -367,10 +377,15 @@ def prepare_backups(store: Path, *, require_existing: bool = False) -> list[dict
             _fail("required_source_database_uninitialized")
         if any(current[field] != original[field] for field in ("device", "inode")):
             _fail("source_changed_during_backup")
-        if source.name == "messages.db" and not current["migration_complete"]:
-            remaining_migration_bytes += current["estimated_bytes"]
+        current_migration_reserve_bytes += _pending_retention_migration_reserve_bytes(
+            source, current
+        )
     _require_space(
-        store, max(reserve, MINIMUM_HEADROOM + 2 * remaining_migration_bytes)
+        store,
+        max(
+            initial_runtime_reserve_bytes,
+            MINIMUM_HEADROOM + current_migration_reserve_bytes,
+        ),
     )
     return completed
 
