@@ -43,8 +43,6 @@ def _canonical_address(value, lid_to_phone, phone_to_lid):
         return value
     lid_phone = lid_to_phone.get(value)
     is_phone = value in phone_to_lid
-    # Bare senders have no server namespace. If both interpretations exist and
-    # disagree, there is no safe alias edge for that bare representation.
     if lid_phone and is_phone and lid_phone != value:
         return None
     if lid_phone:
@@ -105,12 +103,12 @@ def prepare_logical_messages(conn, identity_index=None, snapshot=None):
     if snapshot is not None:
         if type(snapshot) is not int or snapshot < 0:
             raise ValueError("Message identity snapshot must be a nonnegative integer")
-    version = conn.execute("PRAGMA main.data_version").fetchone()[0]
+    main_data_version = conn.execute("PRAGMA main.data_version").fetchone()[0]
     cache_exists = conn.execute(
         "SELECT 1 FROM sqlite_temp_master WHERE name='_logical_message_state'"
     ).fetchone()
-    changes = conn.execute("SELECT total_changes()").fetchone()[0]
-    cache_key = (revision, snapshot, version, changes)
+    connection_changes = conn.execute("SELECT total_changes()").fetchone()[0]
+    cache_key = (revision, snapshot, main_data_version, connection_changes)
     if cache_exists and _prepared(conn):
         state = conn.execute("SELECT state FROM _logical_message_state").fetchone()
         if state and tuple(json.loads(state[0])) == cache_key:
@@ -203,10 +201,19 @@ def prepare_logical_messages(conn, identity_index=None, snapshot=None):
         "JOIN _logical_message_rows source ON source.source_rowid=groups.representative_rowid"
     )
     conn.execute("CREATE TEMP TABLE _logical_message_state (state TEXT NOT NULL)")
-    # The cache marker accounts for its own INSERT. TEMP writes must not make a
-    # second metadata lookup reconstruct the entire archive on this connection.
-    changes = conn.execute("SELECT total_changes()").fetchone()[0]
-    cache_key = (revision, snapshot, version, changes + 1)
+    connection_changes_before_state_insert = conn.execute(
+        "SELECT total_changes()"
+    ).fetchone()[0]
+    state_marker_rows_to_insert = 1
+    connection_changes_after_state_insert = (
+        connection_changes_before_state_insert + state_marker_rows_to_insert
+    )
+    cache_key = (
+        revision,
+        snapshot,
+        main_data_version,
+        connection_changes_after_state_insert,
+    )
     conn.execute(
         "INSERT INTO _logical_message_state VALUES(?)", (json.dumps(cache_key),)
     )
@@ -233,8 +240,6 @@ def _safe_string(value, maximum=512):
 
 
 def _identifier_fields(serialized, fields, nested=None):
-    # Original provider objects can contain unrelated personal data and secrets.
-    # Only explicitly named string identifiers are eligible for tool responses.
     if not isinstance(serialized, str) or len(serialized) > 131_072:
         return {}
     try:

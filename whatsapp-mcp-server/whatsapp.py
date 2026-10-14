@@ -39,7 +39,6 @@ identities.path = os.environ.get(
 
 
 def open_messages_db():
-    # Read-only prevents a missing/misconfigured path from creating an empty DB.
     return sqlite3.connect(
         Path(MESSAGES_DB_PATH).resolve().as_uri() + "?mode=ro", uri=True
     )
@@ -429,7 +428,6 @@ def list_messages(
     )
     chat_aliases = identities.aliases(chat_jid) if chat_jid else None
     with messages_connection() as conn:
-        # A page and its context use one consistent read snapshot.
         conn.execute("BEGIN")
         rows, has_more, template = query_messages(
             conn,
@@ -519,7 +517,6 @@ def _prepare_logical_chats(conn):
         "CREATE INDEX _logical_chat_members_family "
         "ON _logical_chat_members(canonical_chat_jid)"
     )
-    # Keep an actual stored JID stable when a later alias is added to the archive.
     conn.execute(
         "CREATE TEMP TABLE _logical_chats AS "
         "SELECT member.jid, member.name, "

@@ -222,7 +222,6 @@ def query_messages(
     ordering = f"{TIME_KEY} DESC, messages.id DESC, messages.chat_jid DESC"
     if ranked:
         ordering = "matched.match_rank ASC, " + ordering
-    # Filter physical sources, then deduplicate before any page boundaries.
     # Materialization evaluates FTS bm25 in its supported query context.
     where = " WHERE " + " AND ".join(filters) if filters else ""
     sql = f"""

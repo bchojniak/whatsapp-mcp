@@ -39,7 +39,6 @@ if [[ "${WHATSAPP_MIGRATION_MODE:-false}" == "true" ]]; then
     exec sleep infinity
 fi
 
-# Every connection route requires a valid application access policy.
 tunnel_enabled="$(/app/whatsapp-mcp-server/.venv/bin/python /app/whatsapp-mcp-server/access_control.py --print-tunnel-enabled)"
 if [[ "$tunnel_enabled" == "true" ]]; then
     if [[ -z "${CONTROL_PLANE_API_KEY:-}" ]]; then
@@ -65,8 +64,6 @@ fi
     --bridge /app/bin/whatsapp-bridge &
 bridge_pid=$!
 
-# Two bounded online copies plus verification have their own budget. Do not
-# consume the bridge's API startup window while its predecessor is backing up.
 backup_timeout="${WHATSAPP_BACKUP_START_TIMEOUT:-1500}"
 backup_deadline=$((SECONDS + backup_timeout))
 until [[ "$(cat "$backup_ready_file")" == "verified" ]]; do
@@ -147,7 +144,6 @@ if [[ -n "${TS_AUTHKEY:-}" ]]; then
         fi
         sleep 0.2
     done
-    # Do not print TS_AUTHKEY.
     tailscale --socket=/tmp/tailscaled.sock up \
         --auth-key="${TS_AUTHKEY}" \
         --hostname="${TS_HOSTNAME:-whatsapp-mcp}" \
@@ -165,7 +161,6 @@ if [[ "$tunnel_enabled" == "true" ]]; then
     echo "WhatsApp MCP server is ready; starting OpenAI Secure MCP Tunnel"
     export MCP_SERVER_URL="${MCP_SERVER_URL:-$mcp_url}"
     unset MCP_COMMAND
-    # Resolve the secret inside tunnel-client; never put the key itself in argv/logs.
     tunnel-client run \
         --mcp.extra-headers "X-WhatsApp-MCP-Key: env:WHATSAPP_MCP_TUNNEL_KEY" \
         --mcp.discovery-extra-headers "X-WhatsApp-MCP-Key: env:WHATSAPP_MCP_TUNNEL_KEY" &

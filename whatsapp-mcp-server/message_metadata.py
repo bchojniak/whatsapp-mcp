@@ -41,6 +41,24 @@ DETAIL_FIELDS = {
 }
 
 
+_PHYSICAL_SOURCE_METADATA_SQL = (
+    "SELECT metadata_json FROM message_metadata WHERE message_id=? AND chat_jid=?"
+)
+_LOGICAL_MESSAGE_METADATA_SQL = (
+    "SELECT metadata.metadata_json FROM logical_message_sources source "
+    "JOIN logical_messages logical ON logical.logical_id=source.logical_id "
+    "JOIN main.messages raw ON raw.rowid=source.source_rowid "
+    "JOIN message_metadata metadata ON metadata.message_id=raw.id "
+    "AND metadata.chat_jid=raw.chat_jid "
+    "WHERE source.logical_id IN ("
+    "SELECT original.logical_id FROM logical_message_sources original "
+    "JOIN main.messages requested ON requested.rowid=original.source_rowid "
+    "WHERE requested.id=? AND requested.chat_jid=?) "
+    "ORDER BY (source.source_rowid=logical.rowid) DESC, "
+    "julianday(metadata.observed_at) DESC, source.source_rowid LIMIT 1"
+)
+
+
 def source_metadata(conn, message_id, chat_jid, prefer_exact=False):
     exists = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='message_metadata'"
@@ -50,30 +68,12 @@ def source_metadata(conn, message_id, chat_jid, prefer_exact=False):
     projection_exists = conn.execute(
         "SELECT 1 FROM sqlite_temp_master WHERE name='logical_messages'"
     ).fetchone()
-    if prefer_exact or not projection_exists:
-        # A selected physical media source must never borrow another alias's
-        # MIME type or duration, even when its own metadata was not captured.
-        row = conn.execute(
-            "SELECT metadata_json FROM message_metadata WHERE message_id=? AND chat_jid=?",
-            (message_id, chat_jid),
-        ).fetchone()
+    use_physical_source = prefer_exact or not projection_exists
+    if use_physical_source:
+        lookup_sql = _PHYSICAL_SOURCE_METADATA_SQL
     else:
-        # A metadata-only replay may enrich a non-representative alias. Resolve
-        # within the verified logical identity, never by the bare message ID.
-        row = conn.execute(
-            "SELECT metadata.metadata_json FROM logical_message_sources source "
-            "JOIN logical_messages logical ON logical.logical_id=source.logical_id "
-            "JOIN main.messages raw ON raw.rowid=source.source_rowid "
-            "JOIN message_metadata metadata ON metadata.message_id=raw.id "
-            "AND metadata.chat_jid=raw.chat_jid "
-            "WHERE source.logical_id IN ("
-            "SELECT original.logical_id FROM logical_message_sources original "
-            "JOIN main.messages requested ON requested.rowid=original.source_rowid "
-            "WHERE requested.id=? AND requested.chat_jid=?) "
-            "ORDER BY (source.source_rowid=logical.rowid) DESC, "
-            "julianday(metadata.observed_at) DESC, source.source_rowid LIMIT 1",
-            (message_id, chat_jid),
-        ).fetchone()
+        lookup_sql = _LOGICAL_MESSAGE_METADATA_SQL
+    row = conn.execute(lookup_sql, (message_id, chat_jid)).fetchone()
     if not row:
         return None
     try:
@@ -121,8 +121,6 @@ def public_message_metadata(conn, message_id, chat_jid):
 
 
 def public_media_metadata(conn, message_id, chat_jid):
-    # Retrieval can explicitly choose a richer physical media source. Its media
-    # fields must stay paired with that source's download reference.
     value = source_metadata(conn, message_id, chat_jid, prefer_exact=True)
     if value is None:
         return {"source_metadata": "not_captured"}
@@ -166,8 +164,6 @@ def metadata_coverage(conn, chat_aliases=None, identity_index=None):
     media_types = {kind: count for kind, count in rows if kind}
     captured, captured_media, message_types = 0, 0, {}
     if exists:
-        # Rank source records once so each logical message contributes exactly
-        # one captured type, even when both aliases retain source metadata.
         metadata_rows = conn.execute(
             "WITH ranked_metadata AS ("
             "SELECT source.logical_id, metadata.message_type, "

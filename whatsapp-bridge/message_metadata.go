@@ -21,7 +21,6 @@ type messageMetadata struct {
 	Details     map[string]interface{} `json:"details,omitempty"`
 }
 
-// Preserve wrappers and unknown fields in SourcePayload; unwrap only for indexing.
 func unwrapArchiveMessage(message *waE2E.Message) *waE2E.Message {
 	for depth := 0; message != nil && depth < 16; depth++ {
 		if next := message.GetDeviceSentMessage().GetMessage(); next != nil {
@@ -75,8 +74,6 @@ func archiveMessageBody(message *waE2E.Message) (string, proto.Message) {
 	return "unknown", message
 }
 
-// Business templates can nest ordinary attachments. Their full payload retains
-// all attachments; the one-file download tool selects the first one.
 func findArchiveMedia(message proto.Message, depth int) (string, proto.Message) {
 	if message == nil || depth > 16 {
 		return "", nil
@@ -101,7 +98,6 @@ func findArchiveMedia(message proto.Message, depth int) (string, proto.Message) 
 	fields := reflection.Descriptor().Fields()
 	for index := 0; index < fields.Len(); index++ {
 		field := fields.Get(index)
-		// A quoted message is context, not a new attachment in this message.
 		if field.Kind() != protoreflect.MessageKind || field.Name() == "contextInfo" || field.Name() == "quotedMessage" || !reflection.Has(field) {
 			continue
 		}
@@ -204,8 +200,6 @@ func captureArchivePayload(message *incomingMessage, source proto.Message, forma
 	message.SourcePayload, message.SourceFormat = payload, format
 	message.Metadata, message.MessageType = encoded, metadata.MessageType
 	if archiveTransportMessage(content) {
-		// Peer history responses and key exchange are transport events, not
-		// phone-visible chat messages or valid anchors for the user's history.
 		message.Content, message.MediaType = "", ""
 		return nil
 	}
@@ -222,7 +216,7 @@ func captureArchivePayload(message *incomingMessage, source proto.Message, forma
 func archiveTransportMessage(message *waE2E.Message) bool {
 	message = unwrapArchiveMessage(message)
 	if message == nil {
-		return false // History stubs retain their WebMessageInfo source.
+		return false
 	}
 	if protocol := message.GetProtocolMessage(); protocol != nil {
 		switch protocol.GetType() {
@@ -241,7 +235,7 @@ func archiveTransportMessage(message *waE2E.Message) bool {
 		case waE2E.ProtocolMessage_REVOKE, waE2E.ProtocolMessage_MESSAGE_EDIT:
 			return protocol.GetKey().GetID() == ""
 		default:
-			return false // Keep visible settings and future protocol message types.
+			return false
 		}
 	}
 	kind, _ := archiveMessageBody(message)
@@ -276,7 +270,7 @@ func readableStructuredContent(message proto.Message, depth int) string {
 
 func storeIncomingMetadata(ctx context.Context, tx *sql.Tx, message *incomingMessage) error {
 	if len(message.SourcePayload) == 0 {
-		return nil // Queued events without a source payload cannot supply metadata.
+		return nil
 	}
 	observedAt := message.ObservedAt
 	if observedAt.IsZero() {

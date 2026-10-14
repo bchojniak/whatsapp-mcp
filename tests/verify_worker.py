@@ -128,7 +128,6 @@ with tempfile.TemporaryDirectory() as directory:
             else:
                 raise RuntimeError("Synthetic worker did not become ready")
             if mode == "tunnel":
-                # Readiness precedes starting the tunnel in the entrypoint.
                 docker(
                     "exec",
                     name,

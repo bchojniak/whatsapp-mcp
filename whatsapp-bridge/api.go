@@ -34,7 +34,6 @@ type DownloadMediaResponse struct {
 	Path     string `json:"path,omitempty"`
 }
 
-// Build the internal API handler. Sending routes do not exist in read-only mode.
 func newRESTHandler(client *whatsmeow.Client, messageStore *MessageStore, readOnly bool) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +81,6 @@ func newRESTHandler(client *whatsmeow.Client, messageStore *MessageStore, readOn
 	})
 
 	if !readOnly {
-		// These endpoints are intentionally absent in read-only deployments.
 		mux.HandleFunc("/api/send", func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -172,7 +170,6 @@ func newRESTHandler(client *whatsmeow.Client, messageStore *MessageStore, readOn
 	return mux
 }
 
-// Start a loopback-only REST API server for the local MCP process.
 func startRESTServer(client *whatsmeow.Client, messageStore *MessageStore, listenAddr string, readOnly bool) <-chan error {
 	handler := newRESTHandler(client, messageStore, readOnly)
 

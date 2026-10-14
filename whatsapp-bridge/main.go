@@ -99,7 +99,6 @@ func main() {
 		return
 	}
 
-	// Keep receipt and download behind the durable notification queue.
 	client.ManualHistorySyncDownload = true
 	client.DisableManualHistorySyncReceipt = true
 	client.SynchronousAck = true

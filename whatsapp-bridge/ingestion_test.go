@@ -82,7 +82,6 @@ func TestIngestionReplayAfterArchiveCommitPreservesMediaAndIdentity(t *testing.T
 	}
 	var rowID int64
 	store.db.QueryRow(`SELECT rowid FROM messages WHERE id='a'`).Scan(&rowID)
-	// Emulate process death after archive commit and before queue completion.
 	journal.db.Close()
 	restarted, err := newIngestionJournal(store, nil, nil)
 	if err != nil {
@@ -216,7 +215,6 @@ func TestRegularHistoryBatchRollsBackAllMessages(t *testing.T) {
 
 func TestJournalFailureIsExplicitAndPersistsWhenStorageRecovers(t *testing.T) {
 	store, journal := ingestionFixture(t)
-	// Refuse writes to the journal, independently of archive availability.
 	journal.db.Exec(`PRAGMA query_only=ON`)
 	if err := journal.enqueue(incomingFixture("a")); err == nil {
 		t.Fatal("expected journal write failure")
@@ -307,7 +305,6 @@ func TestBackgroundWriterHandlesConcurrentEventsAndSnapshots(t *testing.T) {
 	if err := store.db.QueryRow(`SELECT COUNT(*) FROM messages`).Scan(&count); err != nil || count > 1 {
 		t.Fatal("concurrent duplicate writes")
 	}
-	// Shutdown may retain work, but must account for every accepted batch.
 	if journal.state.ReceivedBatches != 10 {
 		t.Fatal("lost concurrent admission")
 	}

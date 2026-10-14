@@ -17,7 +17,6 @@ func TestSearchMigrationIndexesExistingRowsAndSurvivesRestart(t *testing.T) {
 	if !enabled {
 		t.Skip("production FTS verification requires -tags sqlite_fts5")
 	}
-	// Create an archive without derived search indexes.
 	if _, err := store.db.Exec(`DROP TRIGGER messages_fts_insert; DROP TRIGGER messages_fts_update; DROP TRIGGER messages_fts_delete; DROP TABLE messages_fts; DELETE FROM archive_migrations;`); err != nil {
 		t.Fatal(err)
 	}

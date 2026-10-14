@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-// Change only the wire chat address for verified anchors from a completed
-// experiment. Known aliases are required; no phone number is guessed.
 func selectAliasDiagnosticAttempts(store *MessageStore, previous *diagnosticReport, aliasesFor func(string) ([]string, error)) ([]*diagnosticAttempt, error) {
 	if previous.Status != "finished" || len(previous.Attempts) > maxDiagnosticAttempts {
 		return nil, errors.New("prior experiment must be finished")

@@ -73,7 +73,6 @@ with patch.dict(
         revoked = json.loads(registry)
         revoked["pi-agent"]["enabled"] = False
         with patch.dict(os.environ, {"WHATSAPP_MCP_CLIENTS": json.dumps(revoked)}):
-            # A denied request never needs to start the underlying SDK lifespan.
             restarted = TestClient(
                 main.create_http_app(), base_url="http://127.0.0.1:8000"
             )

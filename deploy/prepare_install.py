@@ -115,7 +115,6 @@ def prepare(
 
 
 def write_worker_env(directory, variables):
-    # Values are generated identifiers, JSON, and keys with no newlines or dollars.
     if any(
         "\n" in str(value) or "\r" in str(value) or "$" in str(value)
         for value in variables.values()

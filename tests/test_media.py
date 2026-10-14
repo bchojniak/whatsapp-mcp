@@ -21,7 +21,6 @@ class FakeMCP:
 
 
 def load_server():
-    # Exercise module registration and tool code without requiring network installs.
     modules = {
         name: types.ModuleType(name)
         for name in [

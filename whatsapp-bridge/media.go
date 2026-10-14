@@ -48,7 +48,6 @@ func extractTextContent(msg *waProto.Message) string {
 	return ""
 }
 
-// The internal API exposes this write path only when read-only mode is disabled.
 func sendWhatsAppMessage(client *whatsmeow.Client, recipient string, message string, mediaPath string) (bool, string) {
 	if !client.IsConnected() {
 		return false, "Not connected to WhatsApp"
@@ -63,10 +62,9 @@ func sendWhatsAppMessage(client *whatsmeow.Client, recipient string, message str
 			return false, fmt.Sprintf("Error parsing JID: %v", err)
 		}
 	} else {
-		// Create JID from phone number
 		recipientJID = types.JID{
 			User:   recipient,
-			Server: "s.whatsapp.net", // For personal chats
+			Server: "s.whatsapp.net",
 		}
 	}
 
@@ -78,13 +76,11 @@ func sendWhatsAppMessage(client *whatsmeow.Client, recipient string, message str
 			return false, fmt.Sprintf("Error reading media file: %v", err)
 		}
 
-		// Determine media type and mime type based on file extension
 		fileExt := strings.ToLower(mediaPath[strings.LastIndex(mediaPath, ".")+1:])
 		var mediaType whatsmeow.MediaType
 		var mimeType string
 
 		switch fileExt {
-		// Image types
 		case "jpg", "jpeg":
 			mediaType = whatsmeow.MediaImage
 			mimeType = "image/jpeg"
@@ -98,12 +94,10 @@ func sendWhatsAppMessage(client *whatsmeow.Client, recipient string, message str
 			mediaType = whatsmeow.MediaImage
 			mimeType = "image/webp"
 
-		// Audio types
 		case "ogg":
 			mediaType = whatsmeow.MediaAudio
 			mimeType = "audio/ogg; codecs=opus"
 
-		// Video types
 		case "mp4":
 			mediaType = whatsmeow.MediaVideo
 			mimeType = "video/mp4"
@@ -114,19 +108,16 @@ func sendWhatsAppMessage(client *whatsmeow.Client, recipient string, message str
 			mediaType = whatsmeow.MediaVideo
 			mimeType = "video/quicktime"
 
-		// Document types (for any other file type)
 		default:
 			mediaType = whatsmeow.MediaDocument
 			mimeType = "application/octet-stream"
 		}
 
-		// Upload media to WhatsApp servers
 		resp, err := client.Upload(context.Background(), mediaData, mediaType)
 		if err != nil {
 			return false, fmt.Sprintf("Error uploading media: %v", err)
 		}
 
-		// Create the appropriate message type based on media type
 		switch mediaType {
 		case whatsmeow.MediaImage:
 			msg.ImageMessage = &waProto.ImageMessage{
@@ -140,11 +131,9 @@ func sendWhatsAppMessage(client *whatsmeow.Client, recipient string, message str
 				FileLength:    &resp.FileLength,
 			}
 		case whatsmeow.MediaAudio:
-			// Handle ogg audio files
-			var seconds uint32 = 30 // Default fallback
+			var seconds uint32 = 30
 			var waveform []byte = nil
 
-			// Try to analyze the ogg file
 			if strings.Contains(mimeType, "ogg") {
 				analyzedSeconds, analyzedWaveform, err := analyzeOggOpus(mediaData)
 				if err == nil {
@@ -197,7 +186,6 @@ func sendWhatsAppMessage(client *whatsmeow.Client, recipient string, message str
 		msg.Conversation = proto.String(message)
 	}
 
-	// Send message
 	_, err = client.SendMessage(context.Background(), recipientJID, msg)
 
 	if err != nil {
@@ -207,7 +195,6 @@ func sendWhatsAppMessage(client *whatsmeow.Client, recipient string, message str
 	return true, fmt.Sprintf("Message sent to %s", recipient)
 }
 
-// Extract media info from a message
 func extractMediaInfo(msg *waProto.Message) (mediaType string, filename string, url string, mediaKey []byte, fileSHA256 []byte, fileEncSHA256 []byte, fileLength uint64) {
 	kind, media := findArchiveMedia(unwrapArchiveMessage(msg), 0)
 	if media == nil {
@@ -242,7 +229,6 @@ func extractMediaInfo(msg *waProto.Message) (mediaType string, filename string, 
 	return kind, filename, url, downloadable.GetMediaKey(), downloadable.GetFileSHA256(), downloadable.GetFileEncSHA256(), fileLength
 }
 
-// MediaDownloader implements the whatsmeow.DownloadableMessage interface
 type MediaDownloader struct {
 	URL           string
 	DirectPath    string
@@ -253,56 +239,52 @@ type MediaDownloader struct {
 	MediaType     whatsmeow.MediaType
 }
 
-// GetDirectPath implements the DownloadableMessage interface
 func (d *MediaDownloader) GetDirectPath() string {
 	return d.DirectPath
 }
 
-// GetURL implements the DownloadableMessage interface
 func (d *MediaDownloader) GetURL() string {
 	return d.URL
 }
 
-// GetMediaKey implements the DownloadableMessage interface
 func (d *MediaDownloader) GetMediaKey() []byte {
 	return d.MediaKey
 }
 
-// GetFileLength implements the DownloadableMessage interface
 func (d *MediaDownloader) GetFileLength() uint64 {
 	return d.FileLength
 }
 
-// GetFileSHA256 implements the DownloadableMessage interface
 func (d *MediaDownloader) GetFileSHA256() []byte {
 	return d.FileSHA256
 }
 
-// GetFileEncSHA256 implements the DownloadableMessage interface
 func (d *MediaDownloader) GetFileEncSHA256() []byte {
 	return d.FileEncSHA256
 }
 
-// GetMediaType implements the DownloadableMessage interface
 func (d *MediaDownloader) GetMediaType() whatsmeow.MediaType {
 	return d.MediaType
 }
 
-// Function to download media from a message
-func downloadMedia(client *whatsmeow.Client, messageStore *MessageStore, messageID, chatJID string) (bool, string, string, string, error) {
+type mediaDownloadClient interface {
+	Download(context.Context, whatsmeow.DownloadableMessage) ([]byte, error)
+}
+
+var _ mediaDownloadClient = (*whatsmeow.Client)(nil)
+
+func downloadMedia(client mediaDownloadClient, messageStore *MessageStore, messageID, chatJID string) (bool, string, string, string, error) {
 	var mediaType, filename, url string
 	var mediaKey, fileSHA256, fileEncSHA256 []byte
 	var fileLength uint64
 	var err error
 
-	// First, check if we already have this file
 	chatDir := filepath.Join(messageStore.storeDir, strings.ReplaceAll(chatJID, ":", "_"))
 	localPath := ""
 
 	mediaType, filename, url, mediaKey, fileSHA256, fileEncSHA256, fileLength, err = messageStore.GetMediaInfo(messageID, chatJID)
 
 	if err != nil {
-		// Try to get basic info if extended info isn't available
 		err = messageStore.db.QueryRow(
 			"SELECT media_type, filename FROM messages WHERE id = ? AND chat_jid = ?",
 			messageID, chatJID,
@@ -335,8 +317,6 @@ func downloadMedia(client *whatsmeow.Client, messageStore *MessageStore, message
 		return false, "", "", "", fmt.Errorf("failed to create chat directory: %v", err)
 	}
 
-	// Include message ID so two media items in the same second do not
-	// share a filename and overwrite each other.
 	ext := filepath.Ext(filename)
 	if ext == "" {
 		ext = ".bin"
@@ -358,14 +338,12 @@ func downloadMedia(client *whatsmeow.Client, messageStore *MessageStore, message
 		return true, mediaType, filename, absPath, nil
 	}
 
-	// If we don't have all the media info we need, we can't download
 	if (url == "" && directPath == "") || len(mediaKey) == 0 || len(fileSHA256) == 0 || len(fileEncSHA256) == 0 || fileLength == 0 {
 		return false, "", "", "", fmt.Errorf("incomplete media information for download")
 	}
 
 	fmt.Println("Attempting to download WhatsApp media")
 
-	// Create a downloader that implements DownloadableMessage
 	var waMediaType whatsmeow.MediaType
 	switch mediaType {
 	case "image", "sticker":
@@ -392,19 +370,9 @@ func downloadMedia(client *whatsmeow.Client, messageStore *MessageStore, message
 		MediaType:     waMediaType,
 	}
 
-	// Download the media using whatsmeow client
 	mediaData, err := client.Download(context.Background(), downloader)
 	if err != nil {
-		// Fresh signed URLs need the query string. Expired oe= tokens 403;
-		// retry with a path-only DirectPath so whatsmeow can refresh media conn.
-		pathOnly := strings.SplitN(directPath, "?", 2)[0]
-		if pathOnly != directPath {
-			downloader.DirectPath = pathOnly
-			mediaData, err = client.Download(context.Background(), downloader)
-		}
-		if err != nil {
-			return false, "", "", "", fmt.Errorf("failed to download media: %v", err)
-		}
+		return false, "", "", "", fmt.Errorf("failed to download media: %v", err)
 	}
 
 	if err := os.WriteFile(localPath, mediaData, 0600); err != nil {
@@ -415,78 +383,55 @@ func downloadMedia(client *whatsmeow.Client, messageStore *MessageStore, message
 	return true, mediaType, filename, absPath, nil
 }
 
-// Extract direct path from a WhatsApp media URL
 func extractDirectPathFromURL(url string) string {
-	// The direct path is typically in the URL, we need to extract it
-	// Example URL: https://mmg.whatsapp.net/v/t62.7118-24/13812002_698058036224062_3424455886509161511_n.enc?ccb=11-4&oh=...
 
-	// Find the path part after the domain
 	parts := strings.SplitN(url, ".net/", 2)
 	if len(parts) < 2 {
-		return url // Return original URL if parsing fails
+		return url
 	}
-
-	// Keep the signed query string. whatsmeow appends &hash= after DirectPath,
-	// so stripping ?ccb&oh&oe yields CDN 403 ("Bad URL hash").
 
 	return "/" + parts[1]
 }
 
-// analyzeOggOpus tries to extract duration and generate a simple waveform from an Ogg Opus file
 func analyzeOggOpus(data []byte) (duration uint32, waveform []byte, err error) {
-	// Try to detect if this is a valid Ogg file by checking for the "OggS" signature
-	// at the beginning of the file
 	if len(data) < 4 || string(data[0:4]) != "OggS" {
 		return 0, nil, fmt.Errorf("not a valid Ogg file (missing OggS signature)")
 	}
 
-	// Parse Ogg pages to find the last page with a valid granule position
 	var lastGranule uint64
-	var sampleRate uint32 = 48000 // Default Opus sample rate
+	var sampleRate uint32 = 48000
 	var preSkip uint16 = 0
 	var foundOpusHead bool
 
-	// Scan through the file looking for Ogg pages
 	for i := 0; i < len(data); {
-		// Check if we have enough data to read Ogg page header
 		if i+27 >= len(data) {
 			break
 		}
 
-		// Verify Ogg page signature
 		if string(data[i:i+4]) != "OggS" {
-			// Skip until next potential page
 			i++
 			continue
 		}
 
-		// Extract header fields
 		granulePos := binary.LittleEndian.Uint64(data[i+6 : i+14])
 		pageSeqNum := binary.LittleEndian.Uint32(data[i+18 : i+22])
 		numSegments := int(data[i+26])
 
-		// Extract segment table
 		if i+27+numSegments >= len(data) {
 			break
 		}
 		segmentTable := data[i+27 : i+27+numSegments]
 
-		// Calculate page size
 		pageSize := 27 + numSegments
 		for _, segLen := range segmentTable {
 			pageSize += int(segLen)
 		}
 
-		// Check if we're looking at an OpusHead packet (should be in first few pages)
 		if !foundOpusHead && pageSeqNum <= 1 {
-			// Look for "OpusHead" marker in this page
 			pageData := data[i : i+pageSize]
 			headPos := bytes.Index(pageData, []byte("OpusHead"))
 			if headPos >= 0 && headPos+12 < len(pageData) {
-				// Found OpusHead, extract sample rate and pre-skip
-				// OpusHead format: Magic(8) + Version(1) + Channels(1) + PreSkip(2) + SampleRate(4) + ...
-				headPos += 8 // Skip "OpusHead" marker
-				// PreSkip is 2 bytes at offset 10
+				headPos += 8
 				if headPos+12 <= len(pageData) {
 					preSkip = binary.LittleEndian.Uint16(pageData[headPos+10 : headPos+12])
 					sampleRate = binary.LittleEndian.Uint32(pageData[headPos+12 : headPos+16])
@@ -496,12 +441,10 @@ func analyzeOggOpus(data []byte) (duration uint32, waveform []byte, err error) {
 			}
 		}
 
-		// Keep track of last valid granule position
 		if granulePos != 0 {
 			lastGranule = granulePos
 		}
 
-		// Move to next page
 		i += pageSize
 	}
 
@@ -509,21 +452,17 @@ func analyzeOggOpus(data []byte) (duration uint32, waveform []byte, err error) {
 		fmt.Println("Warning: OpusHead not found, using default values")
 	}
 
-	// Calculate duration based on granule position
 	if lastGranule > 0 {
-		// Formula for duration: (lastGranule - preSkip) / sampleRate
 		durationSeconds := float64(lastGranule-uint64(preSkip)) / float64(sampleRate)
 		duration = uint32(math.Ceil(durationSeconds))
 		fmt.Printf("Calculated Opus duration from granule: %f seconds (lastGranule=%d)\n",
 			durationSeconds, lastGranule)
 	} else {
-		// Fallback to rough estimation if granule position not found
 		fmt.Println("Warning: No valid granule position found, using estimation")
-		durationEstimate := float64(len(data)) / 2000.0 // Very rough approximation
+		durationEstimate := float64(len(data)) / 2000.0
 		duration = uint32(durationEstimate)
 	}
 
-	// Make sure we have a reasonable duration (at least 1 second, at most 300 seconds)
 	if duration < 1 {
 		duration = 1
 	} else if duration > 300 {
@@ -538,43 +477,28 @@ func analyzeOggOpus(data []byte) (duration uint32, waveform []byte, err error) {
 	return duration, waveform, nil
 }
 
-// placeholderWaveform generates a synthetic waveform for WhatsApp voice messages
-// that appears natural with some variability based on the duration
 func placeholderWaveform(duration uint32) []byte {
-	// WhatsApp expects a 64-byte waveform for voice messages
 	const waveformLength = 64
 	waveform := make([]byte, waveformLength)
 
-	// Seed the random number generator for consistent results with the same duration
 	rand.Seed(int64(duration))
 
-	// Create a more natural looking waveform with some patterns and variability
-	// rather than completely random values
-
-	// Base amplitude and frequency - longer messages get faster frequency
 	baseAmplitude := 35.0
 	frequencyFactor := float64(min(int(duration), 120)) / 30.0
 
 	for i := range waveform {
-		// Position in the waveform (normalized 0-1)
 		pos := float64(i) / float64(waveformLength)
 
-		// Create a wave pattern with some randomness
-		// Use multiple sine waves of different frequencies for more natural look
 		val := baseAmplitude * math.Sin(pos*math.Pi*frequencyFactor*8)
 		val += (baseAmplitude / 2) * math.Sin(pos*math.Pi*frequencyFactor*16)
 
-		// Add some randomness to make it look more natural
 		val += (rand.Float64() - 0.5) * 15
 
-		// Add some fade-in and fade-out effects
 		fadeInOut := math.Sin(pos * math.Pi)
 		val = val * (0.7 + 0.3*fadeInOut)
 
-		// Center around 50 (typical voice baseline)
 		val = val + 50
 
-		// Ensure values stay within WhatsApp's expected range (0-100)
 		if val < 0 {
 			val = 0
 		} else if val > 100 {

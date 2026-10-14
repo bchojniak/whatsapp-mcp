@@ -74,8 +74,6 @@ func validateDiagnosticAnchor(store *MessageStore, attempt *diagnosticAttempt) s
 		}
 		return "stored_alias"
 	}
-	// A provider checkpoint can reference an unsupported message that the text/
-	// media archive intentionally omitted. Record that limitation, never invent it.
 	if attempt.Variant == "failed_boundary" {
 		return "provider_checkpoint_only"
 	}
@@ -446,8 +444,6 @@ func runHistoryDiagnostic(ctx context.Context, client *whatsmeow.Client, store *
 			return
 		}
 	}
-	// Retain a short observation window, then keep late-response tracing enabled
-	// after the run finishes. A new run ID is required to issue more requests.
 	if !waitDiagnosticSpacing(ctx, 30*time.Second) {
 		trace.finishRun("interrupted")
 		return

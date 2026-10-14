@@ -30,7 +30,6 @@ def result(status, recipient=None, message_id=None, archive_status=None):
 
 
 def prepare_journal(conn):
-    # Serialize additive upgrades with reservations from simultaneous callers.
     conn.execute("BEGIN IMMEDIATE")
     try:
         conn.execute("""CREATE TABLE IF NOT EXISTS sends (
@@ -69,8 +68,6 @@ def send_text_once(path, client, recipient, message, request_id, send):
     ).hexdigest()
     request_hash = hashlib.sha256(request_id.encode()).hexdigest()
     try:
-        # The volume directory must already exist. No private content or raw request
-        # IDs are stored; the payload digest detects conflicting reuse.
         fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         try:
             os.fchmod(fd, 0o600)
@@ -92,8 +89,6 @@ def send_text_once(path, client, recipient, message, request_id, send):
                 if row[0] != digest:
                     return result("conflict")
                 return result(row[1], recipient, row[2], row[3])
-            # The unknown reservation is committed before the one permitted call.
-            # A crash or lost reply must not turn into a duplicate after restart.
             try:
                 success, details = send(recipient, message)
             except Exception:

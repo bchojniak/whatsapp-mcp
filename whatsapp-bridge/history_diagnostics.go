@@ -86,9 +86,6 @@ type diagnosticReport struct {
 	DroppedObservations int                      `json:"dropped_observations"`
 }
 
-// Raw chat/anchor references stay in this private file. Health and Railway logs
-// expose only labels, stages, dates and counts. Message bodies and media secrets
-// are never copied into diagnostic reports.
 type historyDiagnostics struct {
 	mu        sync.Mutex
 	path      string
@@ -136,7 +133,6 @@ func openHistoryDiagnostics(store *MessageStore, runID, sourceRunID, previousRun
 		if trace.report.RunID != runID || trace.report.SourceRunID != sourceRunID || trace.report.PreviousRunID != previousRunID || trace.report.Mode != mode || len(trace.report.Attempts) > maxDiagnosticAttempts || len(trace.report.Responses) > maxDiagnosticResponses || len(trace.report.Notifications) > maxDiagnosticResponses {
 			return nil, errors.New("incompatible diagnostic report")
 		}
-		// An uncertain send is never repeated automatically after a restart.
 		if trace.report.Status == "running" {
 			trace.report.Status = "interrupted"
 			for _, attempt := range trace.report.Attempts {

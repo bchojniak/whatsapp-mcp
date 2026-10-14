@@ -159,7 +159,6 @@ def archive_coverage(conn, database_path, chat_aliases=None, identity_index=None
         "metadata_coverage": metadata_coverage(conn, chat_aliases, identity_index),
     }
     if chat_aliases:
-        # This compatibility field counts conservative message identities, not bare IDs.
         result["stored_unique_message_ids"] = row[0]
         result["preferred_request_jid"] = None
         table_exists = conn.execute(

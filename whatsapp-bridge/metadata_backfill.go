@@ -17,8 +17,6 @@ type metadataReplayState struct {
 	AutomaticRetries int           `json:"automatic_retries"`
 }
 
-// For runs below archiveCaptureVersion, replay only previously requested ranges.
-// Preserve history cursors and counters; unrequested chats use normal capture.
 func initializeMetadataReplay(store *MessageStore, report *backfillReport) error {
 	if report.CaptureVersion >= archiveCaptureVersion {
 		return nil

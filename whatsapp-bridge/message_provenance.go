@@ -7,10 +7,6 @@ import (
 	"time"
 )
 
-// The version archive is additive: the metadata table holds the current
-// projection, and neither physical messages nor downloaded filenames are moved.
-// Exact byte comparisons avoid hash collisions and do not index large payloads.
-// SQLite serializes these INSERT ... SELECT statements with all other writers.
 const messageMetadataVersionsSchema = `
 	CREATE TABLE IF NOT EXISTS message_metadata_versions (
 		version_id INTEGER PRIMARY KEY,
@@ -28,9 +24,6 @@ const messageMetadataVersionsSchema = `
 		ON message_metadata_versions(message_id, chat_jid, version_id);
 `
 
-// Retention triggers cover writers that update metadata without recording versions.
-// Provenance-aware writers insert their version first in the same transaction,
-// so these fallback triggers do not invent a second, unknown source for them.
 const messageMetadataRetentionTriggers = `
 	CREATE TRIGGER IF NOT EXISTS message_metadata_retain_insert
 	AFTER INSERT ON message_metadata BEGIN
@@ -95,8 +88,6 @@ func migrateMessageMetadataVersions(db *sql.DB) error {
 	if _, err := tx.Exec(`UPDATE message_metadata SET observed_at=observed_at WHERE 0`); err != nil {
 		return err
 	}
-	// Install triggers and copy unversioned values in one write transaction
-	// so concurrent metadata writers cannot replace an unretained source.
 	for _, statement := range []string{messageMetadataVersionsSchema, messageMetadataRetentionTriggers, backfillMessageMetadataVersionsSQL} {
 		if _, err := tx.Exec(statement); err != nil {
 			return err

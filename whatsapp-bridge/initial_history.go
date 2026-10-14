@@ -14,9 +14,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Pairing properties are registration-time requests to the phone. Keep the
-// upstream capabilities and quota; replacing the entire profile can break
-// decryption, identity mappings, or later on-demand history.
 func configureInitialHistory(fresh bool) error {
 	raw := strings.TrimSpace(os.Getenv("WHATSAPP_HISTORY_INITIAL_SYNC_FULL"))
 	if raw == "" {
@@ -43,7 +40,6 @@ func initialHistoryProfile(current *waCompanionReg.DeviceProps, days int) *waCom
 	if profile.HistorySyncConfig == nil {
 		profile.HistorySyncConfig = &waCompanionReg.DeviceProps_HistorySyncConfig{}
 	}
-	// Zero means no application-imposed day target, not a promise of all history.
 	profile.HistorySyncConfig.FullSyncDaysLimit = nil
 	if days > 0 {
 		profile.HistorySyncConfig.FullSyncDaysLimit = proto.Uint32(uint32(days))
@@ -73,8 +69,6 @@ func isInitialHistorySync(syncType waHistorySync.HistorySync_HistorySyncType) bo
 }
 
 func initialHistoryReady(started, now, last time.Time, quiet, maximum time.Duration, pending bool, snapshotErr error) bool {
-	// A timeout may stop waiting for more source data. It must never bypass
-	// downloads or uncommitted batches, even when those take longer than maximum.
 	if pending || snapshotErr != nil {
 		return false
 	}
