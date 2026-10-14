@@ -1,0 +1,14 @@
+services:
+  whatsapp-mcp:
+    build: .
+    restart: unless-stopped
+    env_file: .access/worker.env
+    environment:
+      WHATSAPP_MCP_HOST: 0.0.0.0
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - whatsapp-data:/data
+
+volumes:
+  whatsapp-data:

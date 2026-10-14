@@ -1,0 +1,12 @@
+[project]
+name = "whatsapp-mcp-server"
+version = "0.1.0"
+description = "Authenticated WhatsApp MCP search, media retrieval, sync diagnostics, and optional text sending"
+readme = "../README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.28.1",
+    "mcp[cli]>=1.28.1,<2",
+    "requests>=2.33.0",
+    "uvicorn>=0.51.0,<1",
+]

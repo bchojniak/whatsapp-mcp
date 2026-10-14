@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: '0.8.17'
+          enable-cache: false
+      - name: Install locked dependencies
+        working-directory: whatsapp-mcp-server
+        run: uv sync --frozen --no-dev
+      - name: Run offline Python and MCP transport checks
+        run: |
+          whatsapp-mcp-server/.venv/bin/python -m unittest discover -s tests -v
+          whatsapp-mcp-server/.venv/bin/python -m unittest discover -s whatsapp-mcp-server/tests -v
+          whatsapp-mcp-server/.venv/bin/python tests/verify_access.py
+          whatsapp-mcp-server/.venv/bin/python tests/verify_sdk.py
+          whatsapp-mcp-server/.venv/bin/python tests/verify_retrieval_sdk.py
+          whatsapp-mcp-server/.venv/bin/python tests/verify_sending_sdk.py
+          bash -n deploy/entrypoint.sh
+      - name: Build complete Docker image
+        run: docker build --tag whatsapp-mcp:ci .
+      - name: Verify direct and tunnel worker startup without external network
+        run: python tests/verify_worker.py whatsapp-mcp:ci
+      - name: Run Go checks in the exact build toolchain
+        run: |
+          docker run --rm -v "$PWD/whatsapp-bridge:/src" -w /src golang:1.26.5-bookworm sh -c 'go test -tags sqlite_fts5 ./... && go vet -tags sqlite_fts5 ./...'
+
+  secrets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install pinned Gitleaks
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl --fail --silent --show-error --location --retry 3 \
+            --output gitleaks.tar.gz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz' | sha256sum --check
+          mkdir -p gitleaks-bin
+          tar -xzf gitleaks.tar.gz -C gitleaks-bin gitleaks
+          echo "$RUNNER_TEMP/gitleaks-bin" >> "$GITHUB_PATH"
+      - name: Check fetched history without exposing secrets
+        run: gitleaks git --redact --log-opts="--all" --exit-code=1
