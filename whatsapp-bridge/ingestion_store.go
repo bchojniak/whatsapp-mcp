@@ -29,8 +29,6 @@ type incomingMessage struct {
 	ObservedAt                   time.Time `json:",omitempty"`
 }
 
-// History keeps the provider's protobuf, including unsupported entries and end
-// flags, so replay cannot change the backfill's evidence or cursor semantics.
 type ingestionPayload struct {
 	Kind           string
 	Message        *incomingMessage `json:",omitempty"`
@@ -102,8 +100,6 @@ func (store *MessageStore) applyIngestion(ctx context.Context, client *whatsmeow
 		if payload.Message == nil {
 			return nil, 0, errors.New("invalid queued message")
 		}
-		// For queue entries without provenance fields, retain the payload
-		// and record only the source kind established by the queue.
 		incoming := *payload.Message
 		message := &incoming
 		if message.SourceKind == "" {
@@ -171,8 +167,6 @@ func (store *MessageStore) applyHistoryWithProvenance(ctx context.Context, clien
 	if observedAt.IsZero() {
 		observedAt = time.Now().UTC()
 	}
-	// Resolve names before opening a write transaction. Optional contact/group
-	// enrichment must not hold the archive's write lock while using the network.
 	names := make(map[string]string)
 	namingCtx, cancelNames := context.WithTimeout(ctx, 20*time.Second)
 	defer cancelNames()
@@ -272,8 +266,6 @@ func (store *MessageStore) applyHistoryWithProvenance(ctx context.Context, clien
 				return 0, err
 			}
 			if onDemand && mediaType != "" {
-				// Refresh expired retrieval references without replacing the existing
-				// message, timestamp, or downloaded filename, and without counting an insertion.
 				if _, err := tx.ExecContext(ctx, `UPDATE messages SET
 					media_type=CASE WHEN COALESCE(media_type,'')='' THEN ? ELSE media_type END,
 					filename=CASE WHEN COALESCE(filename,'')='' THEN ? ELSE filename END,

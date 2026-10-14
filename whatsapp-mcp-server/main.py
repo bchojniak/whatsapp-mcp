@@ -78,8 +78,6 @@ from whatsapp import (
     send_text_message as whatsapp_send_message,
 )
 
-# Initialize FastMCP server. Railway uses stateless Streamable HTTP on loopback
-# so the tunnel can recover cleanly across connector sessions and deploys.
 MCP_TRANSPORT = (
     os.environ.get("WHATSAPP_MCP_TRANSPORT", "streamable-http").strip().lower()
 )
@@ -128,7 +126,6 @@ READ_ONLY_ANNOTATIONS = ToolAnnotations(
 MAX_INLINE_MEDIA_BYTES = 8 * 1024 * 1024
 
 
-# FastMCP publishes docstrings verbatim; formatting skips keep discovery text stable.
 @mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 def search_contacts(query: str) -> Dict[str, Any]:
     """Resolve a contact name or full phone number before searching messages.
@@ -429,7 +426,6 @@ def download_media(
     """  # fmt: skip
     if not message_id or not chat_jid:
         raise ValueError("message_id and chat_jid are required")
-    # Only download media attached to a known message in the requested chat.
     with closing(open_messages_db()) as conn:
         conn.execute("BEGIN")
         source = message_media_source(conn, message_id, chat_jid)
@@ -472,7 +468,6 @@ def download_media(
         and original_media
         and (not original_media[2] or original_media[2] <= MAX_INLINE_MEDIA_BYTES)
     ):
-        # A complete alias can have expired references while the original is cached.
         file_path, error = whatsapp_download_media(message_id, chat_jid)
         if file_path:
             source_id, source_jid = message_id, chat_jid
@@ -562,5 +557,4 @@ if __name__ == "__main__":
     import uvicorn
 
     logging.basicConfig(level=logging.INFO)
-    # Disable generic access logs: they can include sensitive URLs/query strings.
     uvicorn.run(create_http_app(), host=MCP_HOST, port=MCP_PORT, access_log=False)

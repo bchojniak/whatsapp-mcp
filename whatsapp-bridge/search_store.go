@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-// These migrations add derived indexes; original message rows and keys stay intact.
 func migrateSearchStore(db *sql.DB) error {
 	tx, err := db.Begin()
 	if err != nil {
@@ -28,7 +27,6 @@ func migrateSearchStore(db *sql.DB) error {
 	if err := tx.QueryRow(`SELECT sqlite_compileoption_used('ENABLE_FTS5')`).Scan(&enabled); err != nil {
 		return err
 	}
-	// Plain Go builds remain usable; production builds enable sqlite_fts5 explicitly.
 	if enabled {
 		if _, err := tx.Exec(`
 			CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(content, filename, content='messages', content_rowid='rowid', tokenize='unicode61 remove_diacritics 2');

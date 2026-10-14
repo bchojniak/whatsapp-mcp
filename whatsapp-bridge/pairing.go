@@ -21,8 +21,6 @@ import (
 	"rsc.io/qr"
 )
 
-// This listener is never published. An authenticated Railway SSH session reads
-// its ephemeral token and relays only the status or PNG to the operator.
 type pairingServer struct {
 	mu        sync.Mutex
 	code      string
@@ -124,8 +122,6 @@ func (server *pairingServer) ServeHTTP(writer http.ResponseWriter, request *http
 	}
 }
 
-// Reuse saved sessions. New accounts can pair privately or use an
-// explicitly enabled terminal QR; private mode always keeps QR data out of logs.
 func connectWhatsApp(client *whatsmeow.Client, pairing *pairingServer, allowLogQR bool) error {
 	if client.Store.ID != nil {
 		return client.Connect()

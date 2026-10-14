@@ -51,15 +51,11 @@ def source_metadata(conn, message_id, chat_jid, prefer_exact=False):
         "SELECT 1 FROM sqlite_temp_master WHERE name='logical_messages'"
     ).fetchone()
     if prefer_exact or not projection_exists:
-        # A selected physical media source must never borrow another alias's
-        # MIME type or duration, even when its own metadata was not captured.
         row = conn.execute(
             "SELECT metadata_json FROM message_metadata WHERE message_id=? AND chat_jid=?",
             (message_id, chat_jid),
         ).fetchone()
     else:
-        # A metadata-only replay may enrich a non-representative alias. Resolve
-        # within the verified logical identity, never by the bare message ID.
         row = conn.execute(
             "SELECT metadata.metadata_json FROM logical_message_sources source "
             "JOIN logical_messages logical ON logical.logical_id=source.logical_id "
@@ -121,8 +117,6 @@ def public_message_metadata(conn, message_id, chat_jid):
 
 
 def public_media_metadata(conn, message_id, chat_jid):
-    # Retrieval can explicitly choose a richer physical media source. Its media
-    # fields must stay paired with that source's download reference.
     value = source_metadata(conn, message_id, chat_jid, prefer_exact=True)
     if value is None:
         return {"source_metadata": "not_captured"}
@@ -166,8 +160,6 @@ def metadata_coverage(conn, chat_aliases=None, identity_index=None):
     media_types = {kind: count for kind, count in rows if kind}
     captured, captured_media, message_types = 0, 0, {}
     if exists:
-        # Rank source records once so each logical message contributes exactly
-        # one captured type, even when both aliases retain source metadata.
         metadata_rows = conn.execute(
             "WITH ranked_metadata AS ("
             "SELECT source.logical_id, metadata.message_type, "

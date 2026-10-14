@@ -56,14 +56,12 @@ func dispatchTextAndArchive(ctx context.Context, store *MessageStore, own, recip
 	if err != nil {
 		return response
 	}
-	// This is a local outgoing observation, not a received provider event or receipt.
 	payload.Message.SourceKind = "outgoing"
 	archiveCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if _, _, err = store.applyIngestion(archiveCtx, nil, payload); err == nil {
 		response.ArchiveStatus = "saved"
 	} else if store.ingestion != nil && store.ingestion.enqueue(payload) == nil {
-		// Recovery replays only the archive write; it never dispatches another send.
 		response.ArchiveStatus = "pending"
 	}
 	return response

@@ -15,7 +15,6 @@ from access_control import _CLIENT_ID, ALL_TOOLS, READ_TOOLS, AccessPolicy
 
 
 def private_write(path, value):
-    # Atomic replacement; existing permissive files cannot retain their permissions.
     fd, temporary = tempfile.mkstemp(dir=path.parent)
     try:
         with os.fdopen(fd, "w") as stream:

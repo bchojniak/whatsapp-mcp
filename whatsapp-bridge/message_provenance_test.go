@@ -57,7 +57,6 @@ func TestSourceVersionsPreserveOriginalAndEveryDistinctObservation(t *testing.T)
 	if err := store.db.QueryRow(`SELECT rowid FROM messages`).Scan(&rowID); err != nil {
 		t.Fatal(err)
 	}
-	// Even later observations of the same bytes are retry-idempotent.
 	payload.Message.ObservedAt = time.Unix(300, 0).UTC()
 	apply()
 	assertProvenanceCount(t, store, 1)
@@ -100,7 +99,6 @@ func TestSourceVersionMigrationBackfillsAndProtectsLegacyWriters(t *testing.T) {
 	if _, _, err := store.applyIngestion(context.Background(), nil, incomingFixture("legacy")); err != nil {
 		t.Fatal(err)
 	}
-	// Create a metadata source without a retained version.
 	if _, err := store.db.Exec(`
 		DROP TRIGGER message_metadata_retain_insert;
 		DROP TRIGGER message_metadata_retain_before_update;
@@ -124,8 +122,6 @@ func TestSourceVersionMigrationBackfillsAndProtectsLegacyWriters(t *testing.T) {
 	if source != "legacy_metadata" || provenance != "{}" || !bytes.Equal(raw, []byte{0, 1, 255}) {
 		t.Fatal("legacy migration changed source bytes or invented provenance")
 	}
-	// A writer can upsert the metadata table directly. Triggers retain
-	// both payload-only and metadata-only changes, including empty payloads.
 	for _, statement := range []string{
 		`UPDATE message_metadata SET source_payload=X'0002FF'`,
 		`UPDATE message_metadata SET metadata_json='{"changed":true}'`,

@@ -6,8 +6,6 @@ import (
 	"strings"
 )
 
-// Keep nulls, all retrieval references, and the original SQLite locator. This
-// also protects messages stored without a provider protobuf.
 const messageRowVersionsSchema = `
 	CREATE TABLE IF NOT EXISTS message_row_versions (
 		version_id INTEGER PRIMARY KEY,
@@ -44,9 +42,6 @@ var messageRowSnapshotFields = []struct {
 	{"file_enc_sha256", "file_enc_sha256"}, {"file_length", "file_length"},
 }
 
-// alias and from are fixed SQL fragments supplied only by the migration below.
-// Sharing the field list keeps trigger and backfill snapshots byte-for-byte
-// equivalent, including the distinction between SQL NULL and empty values.
 func messageRowSnapshotSQL(alias, from string) string {
 	columns := make([]string, 0, len(messageRowSnapshotFields)+1)
 	values := make([]string, 0, len(messageRowSnapshotFields)+1)

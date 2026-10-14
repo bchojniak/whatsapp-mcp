@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-// Zero requests all available history. A bounded run freezes its cutoff
-// when created; restarting must preserve its target and progress.
 func configuredBackfillDays() (int, error) {
 	raw := strings.TrimSpace(os.Getenv("WHATSAPP_HISTORY_BACKFILL_DAYS"))
 	if raw == "" {

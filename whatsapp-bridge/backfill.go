@@ -21,8 +21,6 @@ import (
 	"go.mau.fi/whatsmeow/types/events"
 )
 
-// A whole response commits before its cursor advances. Existing rows, including
-// downloaded media filenames, and each chat's last-message time stay intact.
 func storeOnDemandHistory(client *whatsmeow.Client, store *MessageStore, history *waHistorySync.HistorySync) error {
 	ownUser := ""
 	if client != nil && client.Store != nil && client.Store.ID != nil {
@@ -116,8 +114,6 @@ type backfillReply struct {
 	conversations int
 }
 
-// Only a matching on-demand response can advance the requested chat's cursor.
-// Empty or unmatched replies remain unconfirmed; ordinary sync is ignored.
 type backfillMailbox struct {
 	mu            sync.Mutex
 	chat          string
@@ -266,8 +262,6 @@ func prepareBackfill(store *MessageStore, runID string) (*backfillReport, string
 			chat.Status = "unsupported_chat"
 			continue
 		}
-		// Sweep from the newest stored message so gaps inside the existing date
-		// range are covered as well as messages older than the current archive.
 		chat.Cursor.ID, chat.Cursor.Sender, chat.Cursor.Timestamp, chat.Cursor.FromMe, err = store.GetNewestMessage(chat.JID)
 		if err != nil || chat.Cursor.ID == "" {
 			chat.Status = "no_anchor"
@@ -283,8 +277,6 @@ func prepareBackfill(store *MessageStore, runID string) (*backfillReport, string
 	return report, path, saveBackfillReport(path, report)
 }
 
-// Discover chats that gained a message anchor after the original sweep. Keep
-// chats without an anchor in the report without inventing a request cursor.
 func refreshBackfillChats(store *MessageStore, report *backfillReport) error {
 	rows, err := store.db.Query(`SELECT jid FROM chats UNION SELECT chat_jid FROM messages ORDER BY 1`)
 	if err != nil {
@@ -351,8 +343,6 @@ func applyBackfillResponse(chat *backfillChat, conversation *waHistorySync.Conve
 			continue
 		}
 		timestamp := time.Unix(int64(message.GetMessageTimestamp()), 0).UTC()
-		// WhatsApp orders the batch newest first; the final message at the
-		// oldest timestamp is the cursor even when IDs are not sortable.
 		if timestamp.Before(chat.Cursor.Timestamp) || timestamp.Equal(chat.Cursor.Timestamp) {
 			chat.Cursor = historyCursor{ID: key.GetID(), Sender: key.GetParticipant(), Timestamp: timestamp, FromMe: key.GetFromMe()}
 		}
@@ -407,7 +397,6 @@ func backfillPage(ctx context.Context, client historyRequestClient, mailbox *bac
 		fmt.Printf("BACKFILL request failed: %v\n", err)
 		return
 	}
-	// A server acknowledgement is not proof that the primary phone responded.
 	timer := time.NewTimer(60 * time.Second)
 	defer timer.Stop()
 	select {
@@ -491,8 +480,6 @@ func resumeBackfill(report *backfillReport, resumeID string) bool {
 				hasPendingChats = true
 				continue
 			case chat.LastResult == "":
-				// A requested page with no recorded result has unknown retry eligibility.
-				// Leave the chat unconfirmed until evidence supports a retry.
 				chat.Status = "deferred_previous_result_unknown"
 				continue
 			default:
@@ -521,8 +508,6 @@ func resumeBackfill(report *backfillReport, resumeID string) bool {
 	return true
 }
 
-// Reuse a chat whose phone response is already recorded, with a recent stored
-// anchor, to distinguish phone availability from failures of individual chats.
 func probePrimaryPhone(ctx context.Context, client historyRequestClient, store *MessageStore, mailbox *backfillMailbox, report *backfillReport) bool {
 	for _, chat := range report.Chats {
 		if chat.Received == 0 {

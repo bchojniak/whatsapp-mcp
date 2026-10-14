@@ -61,9 +61,6 @@ type queuedIngestion struct {
 	retryAt  time.Time
 }
 
-// The journal is independent of messages.db. Enqueue commits before an event
-// handler returns; archive commit precedes journal deletion. A crash between
-// these commits replays the batch using the archive's existing message keys.
 type ingestionJournal struct {
 	mu               sync.Mutex
 	db               *sql.DB
@@ -270,8 +267,6 @@ func (journal *ingestionJournal) start() {
 	journal.cancel = cancel
 	journal.done = make(chan struct{})
 	var workers sync.WaitGroup
-	// One sequential downloader and one archive writer. Slow network downloads
-	// must not stop live messages from being committed from the durable queue.
 	for _, process := range []func(context.Context) bool{journal.processOne, journal.processHistoryNotification} {
 		workers.Add(1)
 		go func(process func(context.Context) bool) {

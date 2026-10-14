@@ -12,17 +12,14 @@ import (
 	waLog "go.mau.fi/whatsmeow/util/log"
 )
 
-// GetChatName determines the appropriate name for a chat based on JID and other info
 func GetChatName(client *whatsmeow.Client, messageStore *MessageStore, jid types.JID, chatJID string, conversation interface{}, sender string, logger waLog.Logger) string {
 	return getChatName(context.Background(), client, messageStore, jid, chatJID, conversation, sender, logger)
 }
 
 func getChatName(ctx context.Context, client *whatsmeow.Client, messageStore *MessageStore, jid types.JID, chatJID string, conversation interface{}, sender string, logger waLog.Logger) string {
-	// First, check if chat already exists in database with a name
 	var existingName string
 	err := messageStore.db.QueryRowContext(ctx, "SELECT name FROM chats WHERE jid = ?", chatJID).Scan(&existingName)
 	if err == nil && existingName != "" {
-		// Chat exists with a name, use that
 		logger.Infof("Using existing WhatsApp chat name")
 		return existingName
 	}
@@ -39,7 +36,6 @@ func getChatName(ctx context.Context, client *whatsmeow.Client, messageStore *Me
 			}
 		}
 
-		// If we didn't get a name, try group info
 		if name == "" {
 			var groupInfo *types.GroupInfo
 			var err error
@@ -54,7 +50,6 @@ func getChatName(ctx context.Context, client *whatsmeow.Client, messageStore *Me
 			if err == nil && groupInfo.Name != "" {
 				name = groupInfo.Name
 			} else {
-				// Fallback name for groups
 				name = fmt.Sprintf("Group %s", jid.User)
 			}
 		}
@@ -91,7 +86,6 @@ func handleHistorySync(client *whatsmeow.Client, messageStore *MessageStore, his
 	return err
 }
 
-// On-demand history for one chat. whatsmeow panics if lastKnown is nil.
 func requestHistorySyncForChat(client *whatsmeow.Client, messageStore *MessageStore, chatJID string) {
 	defer func() {
 		if rec := recover(); rec != nil {

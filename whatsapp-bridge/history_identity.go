@@ -57,7 +57,6 @@ func (store *MessageStore) preferredHistoryIdentifier(aliases []string, fallback
 	if err != nil {
 		return "", err
 	}
-	// A previously observed mapping is useful only while WhatsApp still links it.
 	if !containsIdentifier(aliases, preferred) {
 		return fallback, nil
 	}
@@ -121,8 +120,6 @@ func (store *MessageStore) historyCoverage(aliases []string) (*historyCoverage, 
 	return coverage, tx.Commit()
 }
 
-// Existing message row IDs survive UPSERTs. Comparing a saved boundary excludes
-// copies inserted under another known address. The timestamp excludes new chat activity.
 func (store *MessageStore) newOlderHistoryMessages(aliases []string, before *historyCoverage, anchor time.Time) (int, error) {
 	marks, params, err := aliasQuery(aliases)
 	if err != nil || before == nil {
@@ -149,7 +146,6 @@ func responsiveHistoryResult(result string) bool {
 	}
 }
 
-// Preserve physical checkpoints, but schedule each verified conversation once.
 func consolidateBackfillChats(store *MessageStore, report *backfillReport, aliasesFor func(string) ([]string, error), resume bool) error {
 	leaders := make(map[string]*backfillChat)
 	for _, chat := range report.Chats {

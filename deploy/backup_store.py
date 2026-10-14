@@ -16,7 +16,6 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Bump for another incompatible/additive storage transition, not every restart.
 BACKUP_TRANSITION = "message-identity-provenance-v1"
 DATABASE_NAMES = ("messages.db", "whatsapp.db")
 MINIMUM_HEADROOM = 64 * 1024 * 1024
@@ -97,8 +96,6 @@ def store_lock(store: Path):
 
 
 def reject_visible_legacy_bridge() -> None:
-    # /proc cannot prove another container is absent. Railway's single-mounted-
-    # deployment contract also excludes workers that do not share the store lock.
     for process in Path("/proc").glob("[0-9]*/exe"):
         if process.parent.name == str(os.getpid()):
             continue
@@ -229,9 +226,6 @@ def _reuse_backup(directory: Path, source: Path, details: dict) -> dict:
         or manifest.get("sha256") != _sha256(snapshot)
     ):
         _fail("backup_manifest_mismatch")
-    # The verified persistent-volume deployment contract binds this directory.
-    # Device numbers may change on container remount; normal SQLite writes keep
-    # the inode. A replaced/restored file still requires explicit operator review.
     source_identity = manifest.get("source_identity")
     if (
         not isinstance(source_identity, dict)
@@ -248,8 +242,6 @@ def _reuse_backup(directory: Path, source: Path, details: dict) -> dict:
 
 
 def _create_backup(directory: Path, source: Path, details: dict, reserve: int) -> dict:
-    # A fixed exclusive directory also marks an interrupted attempt. Never
-    # delete, overwrite, or automatically multiply incomplete backup attempts.
     directory.mkdir(mode=0o700)
     _sync_directory(directory.parent)
     snapshot = directory / "snapshot.sqlite3"
@@ -268,7 +260,6 @@ def _create_backup(directory: Path, source: Path, details: dict, reserve: int) -
         ) as destination,
     ):
         original.backup(destination, pages=256, progress=progress, sleep=0.05)
-        # Finalize a standalone file even when the live database uses WAL.
         destination.execute("PRAGMA journal_mode=DELETE")
         checks = _verify_database(destination)
     current = source.lstat()
@@ -350,9 +341,6 @@ def prepare_backups(store: Path, *, require_existing: bool = False) -> list[dict
             _log_manifest("reused", manifest)
         else:
             pending.append((source, details))
-    # Reserve additive archive data and its transaction journal only while this
-    # exact transition is pending. Completed migrations must not multiply their
-    # now-larger archive's space requirement on every restart.
     reserve = MINIMUM_HEADROOM + 2 * sum(
         info["estimated_bytes"]
         for source, info in sources

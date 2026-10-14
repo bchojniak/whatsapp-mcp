@@ -9,7 +9,6 @@ import (
 	"time"
 )
 
-// Message represents a chat message for our client
 type Message struct {
 	Time      time.Time
 	Sender    string
@@ -19,7 +18,6 @@ type Message struct {
 	Filename  string
 }
 
-// Database handler for storing message history
 type MessageStore struct {
 	db                   *sql.DB
 	storeDir             string
@@ -107,7 +105,6 @@ func NewMessageStore(storeDir string) (*MessageStore, error) {
 	return &MessageStore{db: db, storeDir: storeDir}, nil
 }
 
-// Close the database connection
 func (store *MessageStore) Close() error {
 	return store.db.Close()
 }
@@ -131,7 +128,6 @@ const storeMessageSQL = `INSERT INTO messages
 		file_enc_sha256=COALESCE(excluded.file_enc_sha256, messages.file_enc_sha256),
 		file_length=CASE WHEN excluded.file_length>0 THEN excluded.file_length ELSE messages.file_length END`
 
-// Store a chat in the database
 func (store *MessageStore) StoreChat(jid, name string, lastMessageTime time.Time) error {
 	_, err := store.db.Exec(
 		storeChatSQL,
@@ -140,10 +136,8 @@ func (store *MessageStore) StoreChat(jid, name string, lastMessageTime time.Time
 	return err
 }
 
-// Store a message in the database
 func (store *MessageStore) StoreMessage(id, chatJID, sender, content string, timestamp time.Time, isFromMe bool,
 	mediaType, filename, url string, mediaKey, fileSHA256, fileEncSHA256 []byte, fileLength uint64) error {
-	// Only store if there's actual content or media
 	if content == "" && mediaType == "" {
 		return nil
 	}
@@ -171,7 +165,6 @@ func (store *MessageStore) GetOldestMessage(chatJID string) (id, sender string, 
 	return
 }
 
-// Get messages from a chat
 func (store *MessageStore) GetMessages(chatJID string, limit int) ([]Message, error) {
 	rows, err := store.db.Query(
 		"SELECT sender, content, timestamp, is_from_me, media_type, filename FROM messages WHERE chat_jid = ? ORDER BY timestamp DESC LIMIT ?",
@@ -195,7 +188,6 @@ func (store *MessageStore) GetMessages(chatJID string, limit int) ([]Message, er
 	return messages, nil
 }
 
-// Get all chats
 func (store *MessageStore) GetChats() (map[string]time.Time, error) {
 	rows, err := store.db.Query("SELECT jid, last_message_time FROM chats ORDER BY last_message_time DESC")
 	if err != nil {
@@ -217,7 +209,6 @@ func (store *MessageStore) GetChats() (map[string]time.Time, error) {
 	return chats, nil
 }
 
-// Store additional media info in the database
 func (store *MessageStore) StoreMediaInfo(id, chatJID, url string, mediaKey, fileSHA256, fileEncSHA256 []byte, fileLength uint64) error {
 	_, err := store.db.Exec(
 		"UPDATE messages SET url = ?, media_key = ?, file_sha256 = ?, file_enc_sha256 = ?, file_length = ? WHERE id = ? AND chat_jid = ?",

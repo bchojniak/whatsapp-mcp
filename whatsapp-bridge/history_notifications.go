@@ -18,8 +18,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Notifications are saved before download. The archive queue then owns the
-// parsed data; remote cleanup is allowed only after that queue commits it.
 type historyDownloadClient interface {
 	IsConnected() bool
 	DownloadHistorySync(context.Context, *waE2E.HistorySyncNotification, bool) (*waHistorySync.HistorySync, error)
@@ -63,7 +61,6 @@ func (journal *ingestionJournal) enqueueIncomingMessage(event *events.Message, d
 	}
 	journal.store.syncObservation.record(false)
 	if notice := historyNotice(event); notice != nil {
-		// A history notice is protocol work, not a second chat-message batch.
 		return journal.enqueueHistoryNotification(event.Info.ID, notice)
 	}
 	payload, err := captureMessage(event)
@@ -99,7 +96,6 @@ func (journal *ingestionJournal) enqueueHistoryNotification(messageID types.Mess
 		return nil
 	}
 	if err == nil {
-		// Leave room for one parsed batch, which can be larger than its notice.
 		err = checkHistoryQueueCapacity(tx, len(data)+maxIngestionBatchBytes, nil)
 	}
 	now := time.Now().UTC()
@@ -146,7 +142,6 @@ func checkHistoryQueueCapacity(tx *sql.Tx, incoming int, replacing *historyNotif
 	var count, size int64
 	err := tx.QueryRow(`SELECT (SELECT COUNT(*) FROM ingestion_queue)+(SELECT COUNT(*) FROM history_notifications WHERE status='pending'), (SELECT COALESCE(SUM(length(payload)),0) FROM ingestion_queue)+(SELECT COALESCE(SUM(length(payload)),0) FROM history_notifications)`).Scan(&count, &size)
 	if replacing != nil {
-		// Moving a notification into the archive queue consumes its reserved slot.
 		count--
 		size -= int64(len(replacing.data))
 	}
@@ -180,7 +175,6 @@ func (journal *ingestionJournal) processHistoryNotification(ctx context.Context)
 	requestCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	if notice.status == "awaiting_storage" {
-		// Inline bootstrap data may have no remote object to delete.
 		if decoded.GetDirectPath() != "" || decoded.GetEncHandle() != "" {
 			err = journal.historyClient.DeleteMedia(requestCtx, whatsmeow.MediaHistory, decoded.GetDirectPath(), decoded.GetFileEncSHA256(), decoded.GetEncHandle())
 			if !historyCleanupComplete(err) {
@@ -233,8 +227,6 @@ func (journal *ingestionJournal) processHistoryNotification(ctx context.Context)
 	return true
 }
 
-// The parsed batch and its notification link share one transaction. A crash
-// cannot leave a notification pointing at a batch that was never persisted.
 func (journal *ingestionJournal) queueDownloadedHistory(notice *historyNotification, payload ingestionPayload, history *waHistorySync.HistorySync) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -248,8 +240,6 @@ func (journal *ingestionJournal) queueDownloadedHistory(notice *historyNotificat
 	if err = (proto.UnmarshalOptions{AllowPartial: true}).Unmarshal(notice.data, metadata); err != nil {
 		return err
 	}
-	// Parsed history owns inline bootstrap content now. Keep only the remote
-	// cleanup metadata so the durable queue does not retain the same blob twice.
 	metadata.InitialHistBootstrapInlinePayload = nil
 	cleanupData, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(metadata)
 	if err != nil {
@@ -373,7 +363,6 @@ func (journal *ingestionJournal) historySnapshotLocked() (map[string]interface{}
 	return downloads, initial, err
 }
 
-// Repeated cleanup after a crash is safe when the remote object is already gone.
 func historyCleanupComplete(err error) bool {
 	if err == nil {
 		return true

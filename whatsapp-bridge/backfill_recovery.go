@@ -36,8 +36,6 @@ func backfillPageWithRecovery(ctx context.Context, client historyRequestClient, 
 	}
 }
 
-// Retries are bounded only while a chat fails to make progress. A phone-wide
-// pause can wait indefinitely without spending the remaining chats' budgets.
 func eligibleBackfillRecovery(report *backfillReport) bool {
 	eligible := false
 	for _, chat := range report.Chats {
@@ -123,8 +121,6 @@ func planBackfillRecovery(report *backfillReport, connected bool, now time.Time,
 			recovery.Status = "awaiting_source_data"
 			delay := time.Hour
 			if report.RequestedDays > 0 {
-				// New devices can still be receiving their initial chat inventory.
-				// This polls local data only; it sends no extra phone requests.
 				delay = time.Minute
 			}
 			next := now.Add(delay)
@@ -153,8 +149,6 @@ func planBackfillRecovery(report *backfillReport, connected bool, now time.Time,
 	return resumeID, true
 }
 
-// The report remains the sole cursor checkpoint. Waiting times and retry
-// budgets live there too, so restarting does not erase progress or cause bursts.
 func runContinuousBackfill(ctx context.Context, client *whatsmeow.Client, store *MessageStore, mailbox *backfillMailbox, runID, initialResumeID string) {
 	for ctx.Err() == nil {
 		report, path, err := prepareBackfill(store, runID)

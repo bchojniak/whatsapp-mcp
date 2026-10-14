@@ -117,7 +117,6 @@ class IdentityIndex:
         if value.endswith("@lid"):
             lid, phone = bare, self.lid_to_phone.get(bare)
         elif "@" not in value:
-            # Bare senders can be either phone numbers or LIDs.
             if (
                 bare in self.lid_to_phone
                 and bare in self.phone_to_lid

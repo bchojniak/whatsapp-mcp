@@ -28,7 +28,6 @@ READ_TOOLS = frozenset(
         "get_sync_status",
     }
 )
-# Support explicit ten-tool policies without granting get_message_identity.
 LEGACY_READ_TOOLS = READ_TOOLS - {"get_message_identity"}
 WRITE_TOOLS = frozenset({"send_message"})
 ALL_TOOLS = READ_TOOLS | WRITE_TOOLS
@@ -82,7 +81,6 @@ class AccessPolicy:
 
     @classmethod
     def from_json(cls, raw):
-        # Configuration errors must never reveal the input or fall back to no auth.
         try:
             config = json.loads(raw, object_pairs_hook=_unique_object)
             if not isinstance(config, dict) or not config:
@@ -124,7 +122,6 @@ class AccessPolicy:
             return None
         digest = hashlib.sha256(key.encode("ascii")).digest()
         matched = None
-        # Compare fixed-size digests; identities are derived from keys, never headers.
         for client in self.clients:
             if hmac.compare_digest(digest, client.digest) and client.enabled:
                 matched = client
@@ -148,7 +145,6 @@ def tunnel_enabled():
         return False
     if value:
         raise RuntimeError("WHATSAPP_MCP_TUNNEL_ENABLED must be true or false")
-    # Partial tunnel configuration must fail validation, not silently disable it.
     return any(
         os.environ.get(name)
         for name in (
@@ -281,7 +277,6 @@ class ClientKeyMiddleware:
                 )
             await send(message)
 
-        # Credentials are checked only here; they are not needed in the tool layer.
         clean_scope = dict(scope)
         clean_scope["headers"] = [
             (name, value)

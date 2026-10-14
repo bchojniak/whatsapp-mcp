@@ -42,14 +42,14 @@ def convert_to_opus_ogg(input_file, output_file=None, bitrate="32k", sample_rate
         "-ar",
         str(sample_rate),
         "-application",
-        "voip",  # Optimize for voice
+        "voip",
         "-vbr",
-        "on",  # Variable bitrate
+        "on",
         "-compression_level",
-        "10",  # Maximum compression
+        "10",
         "-frame_duration",
-        "60",  # 60ms frames (good for voice)
-        "-y",  # Overwrite output file if it exists
+        "60",
+        "-y",
         output_file,
     ]
 
@@ -93,7 +93,6 @@ def convert_to_opus_ogg_temp(input_file, bitrate="32k", sample_rate=24000):
 
 
 if __name__ == "__main__":
-    # Example usage
     import sys
 
     if len(sys.argv) < 2:
